@@ -63,14 +63,10 @@ async function getSheetValues(sheets, range) {
   return res.data.values || [];
 }
 
-/* ======================================================
-   🚫 DUPLICADOS (order_id + event)
-====================================================== */
-async function isDuplicateEvent(sheets, orderId, event) {
-  const rows = await getSheetValues(sheets, "orders!A:C");
-  return rows.some(
-    r => r[0] === String(orderId) && r[2] === event
-  );
+async function findOrderRowIndex(sheets, orderId) {
+  const rows = await getSheetValues(sheets, "orders!A:A");
+  const index = rows.findIndex(r => r[0] === String(orderId));
+  return index === -1 ? null : index + 1; // 1-based
 }
 
 /* ======================================================
@@ -105,67 +101,59 @@ app.post("/webhook", async (req, res) => {
   const { id: orderId, event } = req.body;
   console.log(`🔔 WEBHOOK ${event} ${orderId}`);
 
-  const RESERVE_EVENTS = ["order/created", "order/updated"];
   const CREATE_EVENT = "order/created";
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
-  const SHIP_EVENT   = "order/shipped";
+  const SHIP_EVENT = "order/shipped";
+
+  const RESERVE_EVENTS = [CREATE_EVENT, "order/updated"];
 
   try {
     const sheets = await getSheets();
-
-    if (await isDuplicateEvent(sheets, orderId, event)) {
-      console.log("⏭️ Evento duplicado ignorado");
-      return res.json({ ignored: true });
-    }
-
     const order = await getOrderById(orderId);
+    const now = new Date().toISOString();
+
+    const rowIndex = await findOrderRowIndex(sheets, orderId);
 
 /* ======================
-   📝 ORDERS
+   📝 ORDERS (UPSERT)
 ====================== */
-const now = new Date().toISOString();
+    const orderValues = [[
+      String(order.id),
 
-const orderRow = [[
-  String(order.id),
+      event === PAY_EVENT
+        ? "paid"
+        : event === SHIP_EVENT
+        ? "shipped"
+        : order.status || "open",
 
-  // status
-  event === PAY_EVENT
-    ? "paid"
-    : event === SHIP_EVENT
-    ? "shipped"
-    : order.status || "open",
+      rowIndex ? "" : now,              // created_at
+      event === PAY_EVENT ? now : "",   // paid_at
+      event === SHIP_EVENT ? now : "",  // shipped_at
+      now,                              // updated_at
+      event === PAY_EVENT,              // stock_discounted
+      RESERVE_EVENTS.includes(event)    // stock_reserved
+    ]];
 
-  // created_at
-  event === CREATE_EVENT ? now : "",
+    if (rowIndex) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `orders!A${rowIndex}:H${rowIndex}`,
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: orderValues },
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID,
+        range: "orders!A:H",
+        valueInputOption: "USER_ENTERED",
+        requestBody: { values: orderValues },
+      });
+    }
 
-  // paid_at
-  event === PAY_EVENT ? now : "",
-
-  // shipped_at
-  event === SHIP_EVENT ? now : "",
-
-  // updated_at
-  now,
-
-  // stock_discounted
-  event === PAY_EVENT,
-
-  // stock_reserved
-  RESERVE_EVENTS.includes(event)
-]];
-
-await sheets.spreadsheets.values.append({
-  spreadsheetId: SHEET_ID,
-  range: "orders!A:H",
-  valueInputOption: "USER_ENTERED",
-  requestBody: { values: orderRow },
-});
-
-
-    /* ======================
-       📦 ITEMS + STOCK
-    ====================== */
+/* ======================
+   📦 ITEMS + STOCK
+====================== */
     for (const item of order.products) {
       const qty = Number(item.quantity);
       const variantId = item.variant_id;
