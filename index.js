@@ -107,7 +107,7 @@ async function getOrderById(orderId) {
 
   const response = await axios.get(url, {
     headers: {
-      Authorization: `Bearer ${TN_TOKEN}`, // Esto es clave, no Authentication
+      Authentication: `bearer ${TN_TOKEN}`, 
       "User-Agent": "tiendanube-webhook"
     }
   });
