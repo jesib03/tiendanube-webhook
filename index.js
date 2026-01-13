@@ -21,13 +21,43 @@ const TN_TOKEN = process.env.TIENDANUBE_TOKEN;
 const SHEET_ID = "1DQCp7OsVgz3h6pI5Ho7fqzEy3t9fS-vyvDlbsw2M1GA";
 
 /* ======================================================
-   ✅ HEALTH CHECK
+   🔐 GOOGLE SHEETS AUTH
 ====================================================== */
-app.get("/test-auth", (req, res) => {
-  res.send("🔥 TEST AUTH ROUTE ACTIVA");
+const auth = new google.auth.GoogleAuth({
+  credentials: {
+    client_email: process.env.GOOGLE_CLIENT_EMAIL,
+    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+  },
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
+async function getSheets() {
+  const client = await auth.getClient();
+  return google.sheets({ version: "v4", auth: client });
+}
 
+/* ======================================================
+   ✅ TEST AUTH
+====================================================== */
+app.get("/test-auth", async (req, res) => {
+  try {
+    const sheets = await getSheets();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "orders!A:A",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [["TEST AUTH OK", new Date().toISOString()]],
+      },
+    });
+
+    res.send("✅ AUTH OK — escritura exitosa");
+  } catch (err) {
+    console.error("❌ AUTH ERROR", err.response?.data || err.message);
+    res.status(500).send("❌ AUTH ERROR");
+  }
+});
 
 /* ======================================================
    🔔 WEBHOOK ENDPOINT
@@ -60,23 +90,6 @@ app.listen(PORT, () => {
 });
 
 /* ======================================================
-   🔐 GOOGLE SHEETS AUTH
-====================================================== */
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  },
-  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-});
-
-
-async function getSheets() {
-  const client = await auth.getClient();
-  return google.sheets({ version: "v4", auth: client });
-}
-
-/* ======================================================
    🛒 TIENDA NUBE API
 ====================================================== */
 async function getOrderById(orderId) {
@@ -85,8 +98,8 @@ async function getOrderById(orderId) {
   const response = await axios.get(url, {
     headers: {
       Authentication: `bearer ${TN_TOKEN}`,
-      "User-Agent": "tiendanube-webhook"
-    }
+      "User-Agent": "tiendanube-webhook",
+    },
   });
 
   return response.data;
@@ -104,22 +117,22 @@ async function syncOrderById(orderId, event) {
 
   /* ---------- ORDERS ---------- */
   const orderRow = [[
-  String(order.id),                 // order_id
-  order.status || "",               // status
-  order.created_at || "",           // created_at
-  order.paid_at || "",              // paid_at
-  order.shipped_at || "",           // shipped_at
-  order.updated_at || new Date().toISOString(), // updated_at
-  order.stock_discounted ?? false,  // stock_discounted
-  order.stock_reserved ?? false     // stock_reserved
-]];
+    String(order.id),                 // order_id
+    order.status || "",               // status
+    order.created_at || "",           // created_at
+    order.paid_at || "",              // paid_at
+    order.shipped_at || "",           // shipped_at
+    order.updated_at || new Date().toISOString(), // updated_at
+    order.stock_discounted ?? false,  // stock_discounted
+    order.stock_reserved ?? false     // stock_reserved
+  ]];
 
-await sheets.spreadsheets.values.append({
-  spreadsheetId: SHEET_ID,
-  range: "orders!A:H",
-  valueInputOption: "USER_ENTERED",
-  requestBody: { values: orderRow }
-});
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: "orders!A:H",
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: orderRow },
+  });
 
   /* ---------- ORDER ITEMS ---------- */
   const itemsRows = order.items.map(item => ([
@@ -141,6 +154,7 @@ await sheets.spreadsheets.values.append({
 
   console.log("✅ Orden sincronizada:", orderId);
 }
+
 
 
 
