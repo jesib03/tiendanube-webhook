@@ -98,21 +98,22 @@ async function syncOrderById(orderId, event) {
 
   /* ---------- ORDERS ---------- */
   const orderRow = [[
-    String(order.id),
-    order.status || "",
-    order.paid_at || "",
-    order.shipped_at || "",
-    new Date().toISOString(),
-    false, // stock_discounted
-    false  // stock_reserved
-  ]];
+  String(order.id),                 // order_id
+  order.status || "",               // status
+  order.created_at || "",           // created_at
+  order.paid_at || "",              // paid_at
+  order.shipped_at || "",           // shipped_at
+  order.updated_at || new Date().toISOString(), // updated_at
+  order.stock_discounted ?? false,  // stock_discounted
+  order.stock_reserved ?? false     // stock_reserved
+]];
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: "orders!A:G",
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: orderRow }
-  });
+await sheets.spreadsheets.values.append({
+  spreadsheetId: SHEET_ID,
+  range: "orders!A:H",
+  valueInputOption: "USER_ENTERED",
+  requestBody: { values: orderRow }
+});
 
   /* ---------- ORDER ITEMS ---------- */
   const itemsRows = order.items.map(item => ([
