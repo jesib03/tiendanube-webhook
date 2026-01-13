@@ -53,7 +53,7 @@ async function getOrderById(orderId) {
 }
 
 /* ======================================================
-   🔍 HELPERS GOOGLE SHEETS
+   🔍 HELPERS
 ====================================================== */
 async function getSheetValues(sheets, range) {
   const res = await sheets.spreadsheets.values.get({
@@ -66,7 +66,7 @@ async function getSheetValues(sheets, range) {
 /* ======================================================
    🚫 DUPLICADOS (order_id + event)
 ====================================================== */
-async function isDuplicateOrderEvent(sheets, orderId, event) {
+async function isDuplicateEvent(sheets, orderId, event) {
   const rows = await getSheetValues(sheets, "orders!A:C");
   return rows.some(
     r => r[0] === String(orderId) && r[2] === event
@@ -78,28 +78,22 @@ async function isDuplicateOrderEvent(sheets, orderId, event) {
 ====================================================== */
 async function updateProductStock(sheets, variantId, deltaReal, deltaReservado) {
   const rows = await getSheetValues(sheets, "products!A:H");
+  const index = rows.findIndex(r => String(r[0]) === String(variantId));
 
-  const rowIndex = rows.findIndex(
-    r => String(r[0]) === String(variantId)
-  );
-
-  if (rowIndex === -1) {
+  if (index === -1) {
     console.warn(`⚠️ Variant ${variantId} no existe en products`);
     return;
   }
 
-  const stockReal = Number(rows[rowIndex][3] || 0);
-  const stockReservado = Number(rows[rowIndex][4] || 0);
-
-  const newReal = stockReal + deltaReal;
-  const newReservado = stockReservado + deltaReservado;
+  const real = Number(rows[index][3] || 0);
+  const reservado = Number(rows[index][4] || 0);
 
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
-    range: `products!D${rowIndex + 1}:E${rowIndex + 1}`,
+    range: `products!D${index + 1}:E${index + 1}`,
     valueInputOption: "USER_ENTERED",
     requestBody: {
-      values: [[newReal, newReservado]],
+      values: [[real + deltaReal, reservado + deltaReservado]],
     },
   });
 }
@@ -111,10 +105,14 @@ app.post("/webhook", async (req, res) => {
   const { id: orderId, event } = req.body;
   console.log(`🔔 WEBHOOK ${event} ${orderId}`);
 
+  const RESERVE_EVENTS = ["order/created", "order/updated"];
+  const PAY_EVENT = "order/paid";
+  const CANCEL_EVENT = "order/cancelled";
+
   try {
     const sheets = await getSheets();
 
-    if (await isDuplicateOrderEvent(sheets, orderId, event)) {
+    if (await isDuplicateEvent(sheets, orderId, event)) {
       console.log("⏭️ Evento duplicado ignorado");
       return res.json({ ignored: true });
     }
@@ -126,13 +124,13 @@ app.post("/webhook", async (req, res) => {
     ====================== */
     const orderRow = [[
       String(order.id),
-      event === "order/paid" ? "paid" : order.status,
+      event === PAY_EVENT ? "paid" : order.status,
       event,
       order.created_at || "",
       order.paid_at || "",
       new Date().toISOString(),
-      event === "order/paid",   // stock_discounted
-      event === "order/created" // stock_reserved
+      event === PAY_EVENT,              // stock_discounted
+      RESERVE_EVENTS.includes(event)    // stock_reserved
     ]];
 
     await sheets.spreadsheets.values.append({
@@ -149,12 +147,16 @@ app.post("/webhook", async (req, res) => {
       const qty = Number(item.quantity);
       const variantId = item.variant_id;
 
-      if (event === "order/created") {
+      if (RESERVE_EVENTS.includes(event)) {
         await updateProductStock(sheets, variantId, 0, qty);
       }
 
-      if (event === "order/paid") {
+      if (event === PAY_EVENT) {
         await updateProductStock(sheets, variantId, -qty, -qty);
+      }
+
+      if (event === CANCEL_EVENT) {
+        await updateProductStock(sheets, variantId, 0, -qty);
       }
 
       await sheets.spreadsheets.values.append({
