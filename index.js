@@ -3,6 +3,10 @@ import bodyParser from "body-parser";
 import axios from "axios";
 import crypto from "crypto";
 import { google } from "googleapis";
+import dotenv from "dotenv";
+
+dotenv.config();
+
 
 const app = express();
 app.use(bodyParser.json());
@@ -30,7 +34,7 @@ const auth = new google.auth.GoogleAuth({
   },
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
-
+console.log(process.env.GOOGLE_PRIVATE_KEY.length)
 async function getSheets() {
   const client = await auth.getClient();
   return google.sheets({ version: "v4", auth: client });
