@@ -9,6 +9,21 @@ app.get("/", (req, res) => {
   res.send("✅ Webhook Tienda Nube activo");
 });
 
+// ===============================
+// 🔔 WEBHOOK
+// ===============================
+app.post("/webhook", (req, res) => {
+  console.log("🔔 WEBHOOK RECIBIDO");
+  console.log(req.body);
+
+  res.status(200).json({ success: true });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+});
+
 
 // ===============================
 // 🔐 Google Sheets Auth
@@ -74,20 +89,7 @@ async function syncOrder(order) {
   }
 }
 
-// ===============================
-// 🔔 WEBHOOK
-// ===============================
-app.post("/webhook", (req, res) => {
-  console.log("🔔 WEBHOOK RECIBIDO");
-  console.log(req.body);
 
-  res.status(200).json({ success: true });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
-});
 
 
 
