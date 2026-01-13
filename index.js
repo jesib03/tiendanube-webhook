@@ -119,26 +119,47 @@ app.post("/webhook", async (req, res) => {
 
     const order = await getOrderById(orderId);
 
-    /* ======================
-       📝 ORDERS
-    ====================== */
-    const orderRow = [[
-      String(order.id),
-      event === PAY_EVENT ? "paid" : order.status,
-      event,
-      order.created_at || "",
-      order.paid_at || "",
-      new Date().toISOString(),
-      event === PAY_EVENT,              // stock_discounted
-      RESERVE_EVENTS.includes(event)    // stock_reserved
-    ]];
+/* ======================
+   📝 ORDERS
+====================== */
+const now = new Date().toISOString();
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: "orders!A:H",
-      valueInputOption: "USER_ENTERED",
-      requestBody: { values: orderRow },
-    });
+const orderRow = [[
+  String(order.id),
+
+  // status
+  event === PAY_EVENT
+    ? "paid"
+    : event === SHIP_EVENT
+    ? "shipped"
+    : order.status || "open",
+
+  // created_at
+  event === CREATE_EVENT ? now : "",
+
+  // paid_at
+  event === PAY_EVENT ? now : "",
+
+  // shipped_at
+  event === SHIP_EVENT ? now : "",
+
+  // updated_at
+  now,
+
+  // stock_discounted
+  event === PAY_EVENT,
+
+  // stock_reserved
+  RESERVE_EVENTS.includes(event)
+]];
+
+await sheets.spreadsheets.values.append({
+  spreadsheetId: SHEET_ID,
+  range: "orders!A:H",
+  valueInputOption: "USER_ENTERED",
+  requestBody: { values: orderRow },
+});
+
 
     /* ======================
        📦 ITEMS + STOCK
