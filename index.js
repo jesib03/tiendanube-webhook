@@ -5,6 +5,11 @@ import { google } from "googleapis";
 const app = express();
 app.use(bodyParser.json());
 
+app.get("/", (req, res) => {
+  res.send("✅ Webhook Tienda Nube activo");
+});
+
+
 // ===============================
 // 🔐 Google Sheets Auth
 // ===============================
@@ -72,23 +77,16 @@ async function syncOrder(order) {
 // ===============================
 // 🔔 WEBHOOK
 // ===============================
-app.post("/webhook", async (req, res) => {
-  try {
-    console.log("🔔 WEBHOOK RECIBIDO");
-    console.log("Order ID:", req.body.id);
+app.post("/webhook", (req, res) => {
+  console.log("🔔 WEBHOOK RECIBIDO");
+  console.log(req.body);
 
-    await syncOrder(req.body);
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("❌ ERROR:", error.message);
-    res.status(500).json({ success: false });
-  }
+  res.status(200).json({ success: true });
 });
 
-// ===============================
-app.listen(3000, () => {
-  console.log("🚀 Server listening on port 3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
 
 
