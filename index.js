@@ -23,9 +23,26 @@ const SHEET_ID = "1DQCp7OsVgz3h6pI5Ho7fqzEy3t9fS-vyvDlbsw2M1GA";
 /* ======================================================
    ✅ HEALTH CHECK
 ====================================================== */
-app.get("/", (req, res) => {
-  res.send("✅ Webhook Tienda Nube activo");
+app.get("/test-auth", async (req, res) => {
+  try {
+    const sheets = await getSheets();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "orders!A:A",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [["TEST AUTH OK", new Date().toISOString()]]
+      }
+    });
+
+    res.send("✅ AUTH OK — escritura exitosa");
+  } catch (err) {
+    console.error("❌ AUTH ERROR", err.response?.data || err.message);
+    res.status(500).send("❌ AUTH ERROR");
+  }
 });
+
 
 /* ======================================================
    🔔 WEBHOOK ENDPOINT
