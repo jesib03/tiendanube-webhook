@@ -108,6 +108,7 @@ app.post("/webhook", async (req, res) => {
   const RESERVE_EVENTS = ["order/created", "order/updated"];
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
+  const SHIP_EVENT   = "order/shipped";
 
   try {
     const sheets = await getSheets();
