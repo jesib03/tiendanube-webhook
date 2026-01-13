@@ -106,6 +106,7 @@ app.post("/webhook", async (req, res) => {
   console.log(`🔔 WEBHOOK ${event} ${orderId}`);
 
   const RESERVE_EVENTS = ["order/created", "order/updated"];
+  const CREATE_EVENT = "order/created";
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
   const SHIP_EVENT   = "order/shipped";
