@@ -100,11 +100,11 @@ async function getOrderById(orderId) {
   const url = `${TN_API}/${STORE_ID}/orders/${orderId}`;
 
   const response = await axios.get(url, {
-    headers: {
-      Authentication: `bearer ${TN_TOKEN}`,
-      "User-Agent": "tiendanube-webhook",
-    },
-  });
+  headers: {
+    Authorization: `Bearer ${TN_TOKEN}`,
+    "User-Agent": "tiendanube-webhook"
+  }
+});
 
   return response.data;
 }
