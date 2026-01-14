@@ -105,7 +105,7 @@ app.post("/webhook", async (req, res) => {
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
   const SHIP_EVENT = "order/packed";
-
+  const FULFILL_EVENT  = "order/fulfilled";
   const RESERVE_EVENTS = [CREATE_EVENT, "order/updated"];
 
   try {
@@ -123,13 +123,13 @@ app.post("/webhook", async (req, res) => {
 
       event === PAY_EVENT
         ? "paid"
-        : event === SHIP_EVENT
+        : event === FULFILL_EVENT
         ? "shipped"
         : order.status || "open",
 
       rowIndex ? "" : now,              // created_at
       event === PAY_EVENT ? now : "",   // paid_at
-      event === SHIP_EVENT ? now : "",  // shipped_at
+      event === FULFILL_EVENT ? now : "",  // shipped_at
       now,                              // updated_at
       event === PAY_EVENT,              // stock_discounted
       RESERVE_EVENTS.includes(event)    // stock_reserved
