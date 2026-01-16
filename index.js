@@ -52,6 +52,35 @@ async function getOrderById(orderId) {
   return response.data;
 }
 
+async function getAllProducts() {
+  let page = 1;
+  let allProducts = [];
+  let hasMore = true;
+
+  while (hasMore) {
+    const url = `${TN_API}/${STORE_ID}/products?page=${page}&per_page=50`;
+
+    const response = await axios.get(url, {
+      headers: {
+        Authentication: `bearer ${TN_TOKEN}`,
+        "User-Agent": "tiendanube-sync",
+      },
+    });
+
+    const products = response.data;
+
+    allProducts.push(...products);
+
+    if (products.length < 50) {
+      hasMore = false;
+    } else {
+      page++;
+    }
+  }
+
+  return allProducts;
+}
+
 /* ======================================================
    🔍 HELPERS
 ====================================================== */
@@ -68,6 +97,13 @@ async function findOrderRowIndex(sheets, orderId) {
   const index = rows.findIndex(r => r[0] === String(orderId));
   return index === -1 ? null : index + 1; // 1-based
 }
+
+async function findProductRowByVariant(sheets, variantId) {
+  const rows = await getSheetValues(sheets, "products!A:A");
+  const index = rows.findIndex(r => String(r[0]) === String(variantId));
+  return index === -1 ? null : index + 1;
+}
+
 
 /* ======================================================
    📦 UPDATE STOCK (products)
@@ -195,6 +231,61 @@ app.post("/webhook", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+app.post("/sync-products", async (req, res) => {
+  try {
+    console.log("🔄 Sync de productos iniciado");
+
+    const sheets = await getSheets();
+    const products = await getAllProducts();
+    const now = new Date().toISOString();
+
+    for (const product of products) {
+      for (const variant of product.variants) {
+
+        const variantId = variant.id;
+        const rowIndex = await findProductRowByVariant(sheets, variantId);
+
+        const values = [[
+          String(variantId),
+          product.name,
+          variant.price,
+          variant.stock || 0,
+          0, // stock_reservado
+          variant.sku || "",
+          variant.available !== false,
+          now
+        ]];
+
+        if (rowIndex) {
+          // UPDATE
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: SHEET_ID,
+            range: `products!A${rowIndex}:H${rowIndex}`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values },
+          });
+        } else {
+          // INSERT
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: SHEET_ID,
+            range: "products!A:H",
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values },
+          });
+        }
+      }
+    }
+
+    console.log("✅ Productos sincronizados");
+    res.json({ success: true, products: products.length });
+
+  } catch (err) {
+    console.error("❌ Error sync-products:", err.response?.data || err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 /* ======================================================
    🚀 SERVER
