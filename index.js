@@ -232,6 +232,19 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+/* ======================================================
+   🔄 SYNC PRODUCTS (manual)
+====================================================== */
+app.get("/sync-products", async (req, res) => {
+  try {
+    console.log("🔄 Sync products iniciado");
+    res.json({ ok: true, message: "Sync endpoint activo" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.post("/sync-products", async (req, res) => {
   try {
     console.log("🔄 Sync de productos iniciado");
