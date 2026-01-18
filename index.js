@@ -104,6 +104,25 @@ async function findProductRowByVariant(sheets, variantId) {
   return index === -1 ? null : index + 1;
 }
 
+function getLocalizedValue(value, fallback = "") {
+  if (!value) return fallback;
+
+  if (typeof value === "string") return value;
+
+  if (typeof value === "object") {
+    return (
+      value.es ||
+      value["es-AR"] ||
+      value.pt ||
+      value.en ||
+      Object.values(value)[0] ||
+      fallback
+    );
+  }
+
+  return fallback;
+}
+
 
 /* ======================================================
    📦 UPDATE STOCK (products)
@@ -261,7 +280,7 @@ app.post("/sync-products", async (req, res) => {
 
         const values = [[
           String(variantId),
-          product.name,
+          getLocalizedValue(product.name),
           variant.price,
           variant.stock || 0,
           0, // stock_reservado
