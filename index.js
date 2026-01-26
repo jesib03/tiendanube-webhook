@@ -68,7 +68,6 @@ async function getAllProducts() {
     });
 
     const products = response.data;
-
     allProducts.push(...products);
 
     if (products.length < 50) {
@@ -95,13 +94,32 @@ async function getSheetValues(sheets, range) {
 async function findOrderRowIndex(sheets, orderId) {
   const rows = await getSheetValues(sheets, "orders!A:A");
   const index = rows.findIndex(r => r[0] === String(orderId));
-  return index === -1 ? null : index + 1; // 1-based
+  return index === -1 ? null : index + 1;
 }
 
 async function findProductRowByVariant(sheets, variantId) {
   const rows = await getSheetValues(sheets, "products!A:A");
   const index = rows.findIndex(r => String(r[0]) === String(variantId));
   return index === -1 ? null : index + 1;
+}
+
+async function wasOrderPreviouslyShipped(sheets, rowIndex) {
+  if (!rowIndex) return false;
+
+  const rows = await getSheetValues(
+    sheets,
+    `orders!E${rowIndex}:E${rowIndex}` // shipped_at
+  );
+
+  return Boolean(rows[0]?.[0]);
+}
+
+function isOrderShipped(order) {
+  return (
+    order.fulfillment_status === "fulfilled" ||
+    order.shipping_status === "shipped" ||
+    order.status === "shipped"
+  );
 }
 
 function getLocalizedValue(value, fallback = "") {
@@ -122,7 +140,6 @@ function getLocalizedValue(value, fallback = "") {
 
   return fallback;
 }
-
 
 /* ======================================================
    📦 UPDATE STOCK (products)
@@ -159,35 +176,45 @@ app.post("/webhook", async (req, res) => {
   const CREATE_EVENT = "order/created";
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
-  const SHIP_EVENT = "order/packed";
-  const FULFILL_EVENT  = "order/fulfilled";
   const RESERVE_EVENTS = [CREATE_EVENT, "order/updated"];
 
   try {
     const sheets = await getSheets();
     const order = await getOrderById(orderId);
+    
+    console.log("📦 ORDER STATUS DEBUG", {
+  status: order.status,
+  shipping_status: order.shipping_status,
+  fulfillment_status: order.fulfillment_status,
+  shipping_lines: order.shipping_lines,
+  tracking_number: order.tracking_number,
+  tracking_url: order.tracking_url
+});
+
     const now = new Date().toISOString();
 
     const rowIndex = await findOrderRowIndex(sheets, orderId);
+
+    const shippedNow = isOrderShipped(order);
+    const shippedBefore = await wasOrderPreviouslyShipped(sheets, rowIndex);
+    const justShipped = shippedNow && !shippedBefore;
+
+    if (justShipped) {
+      console.log(`📦 Orden ${orderId} marcada como ENVIADA`);
+    }
 
 /* ======================
    📝 ORDERS (UPSERT)
 ====================== */
     const orderValues = [[
       String(order.id),
-
-      event === PAY_EVENT
-        ? "paid"
-        : event === FULFILL_EVENT
-        ? "shipped"
-        : order.status || "open",
-
-      rowIndex ? "" : now,              // created_at
-      event === PAY_EVENT ? now : "",   // paid_at
-      event === FULFILL_EVENT ? now : "",  // shipped_at
-      now,                              // updated_at
-      event === PAY_EVENT,              // stock_discounted
-      RESERVE_EVENTS.includes(event)    // stock_reserved
+      shippedNow ? "shipped" : order.status || "open",
+      rowIndex ? "" : now,            // created_at
+      event === PAY_EVENT ? now : "", // paid_at
+      justShipped ? now : "",         // shipped_at ⭐
+      now,                            // updated_at
+      event === PAY_EVENT,
+      RESERVE_EVENTS.includes(event)
     ]];
 
     if (rowIndex) {
@@ -255,14 +282,8 @@ app.post("/webhook", async (req, res) => {
    🔄 SYNC PRODUCTS (manual)
 ====================================================== */
 app.get("/sync-products", async (req, res) => {
-  try {
-    console.log("🔄 Sync products iniciado");
-    res.json({ ok: true, message: "Sync endpoint activo" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ ok: true, message: "Sync endpoint activo" });
 });
-
 
 app.post("/sync-products", async (req, res) => {
   try {
@@ -274,7 +295,6 @@ app.post("/sync-products", async (req, res) => {
 
     for (const product of products) {
       for (const variant of product.variants) {
-
         const variantId = variant.id;
         const rowIndex = await findProductRowByVariant(sheets, variantId);
 
@@ -283,14 +303,13 @@ app.post("/sync-products", async (req, res) => {
           getLocalizedValue(product.name),
           variant.price,
           variant.stock || 0,
-          0, // stock_reservado
+          0,
           variant.sku || "",
           variant.available !== false,
           now
         ]];
 
         if (rowIndex) {
-          // UPDATE
           await sheets.spreadsheets.values.update({
             spreadsheetId: SHEET_ID,
             range: `products!A${rowIndex}:H${rowIndex}`,
@@ -298,7 +317,6 @@ app.post("/sync-products", async (req, res) => {
             requestBody: { values },
           });
         } else {
-          // INSERT
           await sheets.spreadsheets.values.append({
             spreadsheetId: SHEET_ID,
             range: "products!A:H",
@@ -310,14 +328,13 @@ app.post("/sync-products", async (req, res) => {
     }
 
     console.log("✅ Productos sincronizados");
-    res.json({ success: true, products: products.length });
+    res.json({ success: true });
 
   } catch (err) {
-    console.error("❌ Error sync-products:", err.response?.data || err.message);
+    console.error("❌ Error sync-products:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
-
 
 /* ======================================================
    🚀 SERVER
