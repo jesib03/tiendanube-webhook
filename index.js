@@ -115,11 +115,7 @@ async function wasOrderPreviouslyShipped(sheets, rowIndex) {
 }
 
 function isOrderShipped(order) {
-  return (
-    order.fulfillment_status === "fulfilled" ||
-    order.shipping_status === "shipped" ||
-    order.status === "shipped"
-  );
+  return order.shipping_status === "shipped";
 }
 
 function getLocalizedValue(value, fallback = "") {
@@ -181,15 +177,6 @@ app.post("/webhook", async (req, res) => {
   try {
     const sheets = await getSheets();
     const order = await getOrderById(orderId);
-    
-    console.log("📦 ORDER STATUS DEBUG", {
-  status: order.status,
-  shipping_status: order.shipping_status,
-  fulfillment_status: order.fulfillment_status,
-  shipping_lines: order.shipping_lines,
-  tracking_number: order.tracking_number,
-  tracking_url: order.tracking_url
-});
 
     const now = new Date().toISOString();
 
