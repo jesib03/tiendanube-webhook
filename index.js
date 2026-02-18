@@ -323,6 +323,37 @@ app.post("/sync-products", async (req, res) => {
   }
 });
 
+app.get("/auth", async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).send("No code received");
+  }
+
+  try {
+    const response = await axios.post(
+      "https://www.tiendanube.com/apps/authorize/token",
+      {
+        client_id: process.env.TN_CLIENT_ID,
+        client_secret: process.env.TN_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+      }
+    );
+
+    const { access_token, user_id } = response.data;
+
+    console.log("ACCESS TOKEN:", access_token);
+    console.log("STORE ID:", user_id);
+
+    res.send("Aplicación instalada correctamente. Token recibido.");
+  } catch (error) {
+    console.error(error.response?.data || error.message);
+    res.status(500).send("Error intercambiando el código.");
+  }
+});
+
+
 /* ======================================================
    🚀 SERVER
 ====================================================== */
