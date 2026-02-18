@@ -18,7 +18,7 @@ const STORE_ID = process.env.TIENDANUBE_STORE_ID;
 const TN_TOKEN = process.env.TN_TOKEN;
 
 // Google Sheets
-const SHEET_ID = "1vtILWw-5fhCMbARvFe4cBUlq2k46Z4G5Po8VT6i3a_Y";
+const SHEET_ID = process.env.SHEET_ID;
 
 /* ======================================================
    🔐 GOOGLE SHEETS AUTH
