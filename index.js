@@ -285,12 +285,6 @@ app.post("/sync-products", async (req, res) => {
     const rowsToInsert = [];
 
     for (const product of products) {
-      console.log("Producto:", product.id);
-
-      if (!product.variants || product.variants.length === 0) {
-        console.log("⚠️ Producto sin variantes:", product.id);
-      }
-
       for (const variant of product.variants || []) {
         rowsToInsert.push([
           String(variant.id),
@@ -308,19 +302,23 @@ app.post("/sync-products", async (req, res) => {
     console.log("Filas a insertar:", rowsToInsert.length);
 
     if (rowsToInsert.length === 0) {
-      return res.json({ success: false, message: "No hay variantes para sincronizar" });
+      return res.json({
+        success: false,
+        message: "No hay variantes para sincronizar"
+      });
     }
-    
-    await sheets.spreadsheets.values.append({
+
+    // Escribimos desde la fila 2 (debajo de encabezados)
+    await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: `products!A2:H${rowsToInsert.length + 1}`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
-      values: rowsToInsert
+        values: rowsToInsert
       },
     });
 
-    console.log("✅ Productos sincronizados (batch)");
+    console.log("✅ Productos sincronizados (update fijo)");
     res.json({ success: true });
 
   } catch (err) {
