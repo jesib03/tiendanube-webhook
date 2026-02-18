@@ -280,10 +280,18 @@ app.post("/sync-products", async (req, res) => {
     const products = await getAllProducts();
     const now = new Date().toISOString();
 
+    console.log("Cantidad de productos recibidos:", products.length);
+
     const rowsToInsert = [];
 
     for (const product of products) {
-      for (const variant of product.variants) {
+      console.log("Producto:", product.id);
+
+      if (!product.variants || product.variants.length === 0) {
+        console.log("⚠️ Producto sin variantes:", product.id);
+      }
+
+      for (const variant of product.variants || []) {
         rowsToInsert.push([
           String(variant.id),
           getLocalizedValue(product.name),
@@ -295,6 +303,12 @@ app.post("/sync-products", async (req, res) => {
           now
         ]);
       }
+    }
+
+    console.log("Filas a insertar:", rowsToInsert.length);
+
+    if (rowsToInsert.length === 0) {
+      return res.json({ success: false, message: "No hay variantes para sincronizar" });
     }
 
     await sheets.spreadsheets.values.append({
@@ -344,36 +358,6 @@ app.get("/setup-webhooks", async (req, res) => {
   } catch (error) {
     console.error("Error creando webhooks:", error.response?.data || error.message);
     res.status(500).send("Error creando webhooks");
-  }
-});
-
-
-app.get("/test-write", async (req, res) => {
-  try {
-    const sheets = await getSheets();
-
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SHEET_ID,
-      range: "products!A:H",
-      valueInputOption: "USER_ENTERED",
-      requestBody: {
-        values: [[
-          "TEST123",
-          "Producto Test",
-          100,
-          10,
-          0,
-          "SKU-TEST",
-          true,
-          new Date().toISOString()
-        ]]
-      },
-    });
-
-    res.send("Escritura test OK");
-  } catch (err) {
-    console.error(err);
-    res.status(500).send(err.message);
   }
 });
 
