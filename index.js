@@ -280,13 +280,12 @@ app.post("/sync-products", async (req, res) => {
     const products = await getAllProducts();
     const now = new Date().toISOString();
 
+    const rowsToInsert = [];
+
     for (const product of products) {
       for (const variant of product.variants) {
-        const variantId = variant.id;
-        const rowIndex = await findProductRowByVariant(sheets, variantId);
-
-        const values = [[
-          String(variantId),
+        rowsToInsert.push([
+          String(variant.id),
           getLocalizedValue(product.name),
           variant.price,
           variant.stock || 0,
@@ -294,27 +293,20 @@ app.post("/sync-products", async (req, res) => {
           variant.sku || "",
           variant.available !== false,
           now
-        ]];
-
-        if (rowIndex) {
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SHEET_ID,
-            range: `products!A${rowIndex}:H${rowIndex}`,
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values },
-          });
-        } else {
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SHEET_ID,
-            range: "products!A:H",
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values },
-          });
-        }
+        ]);
       }
     }
 
-    console.log("✅ Productos sincronizados");
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "products!A:H",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: rowsToInsert
+      },
+    });
+
+    console.log("✅ Productos sincronizados (batch)");
     res.json({ success: true });
 
   } catch (err) {
@@ -322,6 +314,7 @@ app.post("/sync-products", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 app.get("/setup-webhooks", async (req, res) => {
   if (req.query.key !== process.env.ADMIN_KEY) {
