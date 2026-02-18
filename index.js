@@ -310,7 +310,7 @@ app.post("/sync-products", async (req, res) => {
     if (rowsToInsert.length === 0) {
       return res.json({ success: false, message: "No hay variantes para sincronizar" });
     }
-
+    console.log("SHEET_ID usado:", SHEET_ID);
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
       range: "products!A:H",
