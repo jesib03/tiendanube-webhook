@@ -323,6 +323,38 @@ app.post("/sync-products", async (req, res) => {
   }
 });
 
+app.get("/setup-webhooks", async (req, res) => {
+  if (req.query.key !== process.env.ADMIN_KEY) {
+    return res.status(403).send("No autorizado");
+  }
+
+  try {
+    const events = ["order/created", "order/paid", "order/fulfilled"];
+
+    for (const event of events) {
+      await axios.post(
+        `${TN_API}/${STORE_ID}/webhooks`,
+        {
+          event,
+          url: "https://tiendanube-webhook.onrender.com/webhook"
+        },
+        {
+          headers: {
+            Authentication: `bearer ${TN_TOKEN}`,
+            "User-Agent": "tiendanube-webhook"
+          }
+        }
+      );
+    }
+
+    res.send("Webhooks creados correctamente ✅");
+  } catch (error) {
+    console.error("Error creando webhooks:", error.response?.data || error.message);
+    res.status(500).send("Error creando webhooks");
+  }
+});
+
+
 app.get("/auth", async (req, res) => {
   const { code } = req.query;
 
