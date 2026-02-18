@@ -212,13 +212,18 @@ app.post("/webhook", async (req, res) => {
         requestBody: { values: orderValues },
       });
     } else {
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID,
-        range: "orders!A:H",
-        valueInputOption: "USER_ENTERED",
-        requestBody: { values: orderValues },
-      });
-    }
+  // Buscar la próxima fila libre
+  const existingRows = await getSheetValues(sheets, "orders!A:A");
+  const nextRow = existingRows.length + 1;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: `orders!A${nextRow}:H${nextRow}`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: orderValues },
+  });
+}
+
 
 /* ======================
    📦 ITEMS + STOCK
