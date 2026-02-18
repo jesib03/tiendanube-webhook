@@ -348,6 +348,36 @@ app.get("/setup-webhooks", async (req, res) => {
 });
 
 
+app.get("/test-write", async (req, res) => {
+  try {
+    const sheets = await getSheets();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "products!A:H",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[
+          "TEST123",
+          "Producto Test",
+          100,
+          10,
+          0,
+          "SKU-TEST",
+          true,
+          new Date().toISOString()
+        ]]
+      },
+    });
+
+    res.send("Escritura test OK");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send(err.message);
+  }
+});
+
+
 app.get("/auth", async (req, res) => {
   const { code } = req.query;
 
