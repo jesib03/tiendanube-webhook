@@ -190,6 +190,24 @@ app.post("/webhook", async (req, res) => {
       console.log(`📦 Orden ${orderId} marcada como ENVIADA`);
     }
 
+    
+    const eventKey = `${orderId}-${event}`;
+
+    const existingEvents = await getSheetValues(
+      sheets,
+      "order_items!G:G" // columna processed_event
+    );
+
+    const alreadyProcessed = existingEvents.some(
+      row => row[0] === eventKey
+    );
+
+    if (alreadyProcessed) {
+      console.log("⚠️ Evento ya procesado, se ignora:", eventKey);
+      return res.json({ ignored: true });
+    }
+
+
 /* ======================
    📝 ORDERS (UPSERT)
 ====================== */
@@ -233,12 +251,35 @@ app.post("/webhook", async (req, res) => {
       const variantId = item.variant_id;
 
       if (RESERVE_EVENTS.includes(event)) {
-        await updateProductStock(sheets, variantId, 0, qty);
+
+        const rowData = await getSheetValues(
+          sheets,
+          `orders!G${rowIndex}:H${rowIndex}`
+        );
+
+        const stockDiscounted = rowData[0]?.[0];  // columna G
+        const stockReserved = rowData[0]?.[1];    // columna H
+
+        if (!stockReserved) {
+          await updateProductStock(sheets, variantId, 0, qty);
+        }
       }
 
+
       if (event === PAY_EVENT) {
-        await updateProductStock(sheets, variantId, -qty, -qty);
+
+        const rowData = await getSheetValues(
+          sheets,
+          `orders!G${rowIndex}:H${rowIndex}`
+        );
+
+        const stockDiscounted = rowData[0]?.[0]; // columna G
+
+        if (!stockDiscounted) {
+          await updateProductStock(sheets, variantId, -qty, -qty);
+        }
       }
+
 
       if (event === CANCEL_EVENT) {
         await updateProductStock(sheets, variantId, 0, -qty);
@@ -246,7 +287,7 @@ app.post("/webhook", async (req, res) => {
 
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
-        range: "order_items!A:F",
+        range: "order_items!A:G",
         valueInputOption: "USER_ENTERED",
         requestBody: {
           values: [[
@@ -255,7 +296,8 @@ app.post("/webhook", async (req, res) => {
             variantId,
             qty,
             item.price,
-            event
+            event,
+            eventKey
           ]],
         },
       });
@@ -339,7 +381,12 @@ app.get("/setup-webhooks", async (req, res) => {
   }
 
   try {
-    const events = ["order/created", "order/paid", "order/fulfilled"];
+    const events = [
+      "order/created",
+      "order/paid",
+      "order/fulfilled",
+      "order/cancelled"
+    ];
 
     for (const event of events) {
       await axios.post(
