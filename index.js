@@ -172,7 +172,7 @@ app.post("/webhook", async (req, res) => {
   const CREATE_EVENT = "order/created";
   const PAY_EVENT = "order/paid";
   const CANCEL_EVENT = "order/cancelled";
-  const RESERVE_EVENTS = [CREATE_EVENT, "order/updated"];
+  const RESERVE_EVENTS = [CREATE_EVENT];
 
   try {
     const sheets = await getSheets();
@@ -250,6 +250,11 @@ app.post("/webhook", async (req, res) => {
       const qty = Number(item.quantity);
       const variantId = item.variant_id;
 
+      if (!rowIndex) {
+        console.log("⚠️ No se encontró rowIndex para reserva");
+        return;
+      }
+
       if (RESERVE_EVENTS.includes(event)) {
 
         const rowData = await getSheetValues(
@@ -282,25 +287,26 @@ app.post("/webhook", async (req, res) => {
 
 
       if (event === CANCEL_EVENT) {
-        await updateProductStock(sheets, variantId, 0, -qty);
-      }
 
-      await sheets.spreadsheets.values.append({
-        spreadsheetId: SHEET_ID,
-        range: "order_items!A:G",
-        valueInputOption: "USER_ENTERED",
-        requestBody: {
-          values: [[
-            crypto.randomUUID(),
-            String(order.id),
-            variantId,
-            qty,
-            item.price,
-            event,
-            eventKey
-          ]],
-        },
-      });
+        const rowData = await getSheetValues(
+          sheets,
+          `orders!G${rowIndex}:H${rowIndex}`
+        );
+
+        const stockDiscounted = rowData[0]?.[0]; // columna G
+        const stockReserved = rowData[0]?.[1];   // columna H
+
+        if (stockDiscounted) {
+          // La orden ya había descontado stock → devolver stock real
+          await updateProductStock(sheets, variantId, qty, 0);
+          console.log("🔄 Cancelación: stock real devuelto");
+        } 
+        else if (stockReserved) {
+          // Solo estaba reservada → liberar reserva
+          await updateProductStock(sheets, variantId, 0, -qty);
+          console.log("🔄 Cancelación: reserva liberada");
+        }
+      }
     }
 
     console.log(`✅ Orden sincronizada: ${orderId}`);
