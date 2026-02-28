@@ -247,66 +247,75 @@ app.post("/webhook", async (req, res) => {
    📦 ITEMS + STOCK (ROBUSTO)
 ====================== */
 
-for (const item of order.products) {
-  const qty = Number(item.quantity);
-  const variantId = item.variant_id;
+  for (const item of order.products) {
+    const qty = Number(item.quantity);
+    const variantId = item.variant_id;
 
-  const rowData = await getSheetValues(
-    sheets,
-    `orders!G${rowIndex}:H${rowIndex}`
-  );
+    const rowData = await getSheetValues(
+      sheets,
+      `orders!G${rowIndex}:H${rowIndex}`
+    );
 
-  const stockDiscounted = rowData[0]?.[0]; // columna G
-  const stockReserved = rowData[0]?.[1];   // columna H
+    const stockDiscounted = rowData[0]?.[0]; // columna G
+    const stockReserved = rowData[0]?.[1];   // columna H
 
-  const isPaid = order.payment_status === "paid";
-  const isCancelled = order.status === "cancelled";
+    const isPaid = order.payment_status === "paid";
+    const isCancelled = order.status === "cancelled";
 
-  // 🟢 Caso 1: Orden pagada → stock debe estar descontado
-  if (isPaid && !stockDiscounted) {
-    await updateProductStock(sheets, variantId, -qty, -qty);
-    console.log("💰 Pago detectado → stock descontado");
-  }
-
-  // 🔵 Caso 2: Orden creada pero no pagada → stock debe estar reservado
-  if (!isPaid && !isCancelled && !stockReserved) {
-    await updateProductStock(sheets, variantId, 0, qty);
-    console.log("🟡 Orden abierta → stock reservado");
-  }
-
-  // 🔴 Caso 3: Orden cancelada
-  if (isCancelled) {
-
-    if (stockDiscounted) {
-      // devolver stock real
-      await updateProductStock(sheets, variantId, qty, 0);
-      console.log("🔄 Cancelación → stock real devuelto");
+    // 🟢 Caso 1: Orden pagada → stock debe estar descontado
+    if (isPaid && !stockDiscounted) {
+      await updateProductStock(sheets, variantId, -qty, -qty);
+      console.log("💰 Pago detectado → stock descontado");
     }
 
-    if (stockReserved) {
-      // liberar reserva
-      await updateProductStock(sheets, variantId, 0, -qty);
-      console.log("🔄 Cancelación → reserva liberada");
+    // 🔵 Caso 2: Orden creada pero no pagada → stock debe estar reservado
+    if (!isPaid && !isCancelled && !stockReserved) {
+      await updateProductStock(sheets, variantId, 0, qty);
+      console.log("🟡 Orden abierta → stock reservado");
     }
+
+    // 🔴 Caso 3: Orden cancelada
+    if (isCancelled) {
+
+      if (stockDiscounted) {
+        // devolver stock real
+        await updateProductStock(sheets, variantId, qty, 0);
+        console.log("🔄 Cancelación → stock real devuelto");
+      }
+
+      if (stockReserved) {
+        // liberar reserva
+        await updateProductStock(sheets, variantId, 0, -qty);
+        console.log("🔄 Cancelación → reserva liberada");
+      }
+    }
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: "order_items!A:G",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [[
+          crypto.randomUUID(),
+          String(order.id),
+          variantId,
+          qty,
+          item.price,
+          event,
+          eventKey
+        ]],
+      },
+    });
   }
 
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID,
-    range: "order_items!A:G",
-    valueInputOption: "USER_ENTERED",
-    requestBody: {
-      values: [[
-        crypto.randomUUID(),
-        String(order.id),
-        variantId,
-        qty,
-        item.price,
-        event,
-        eventKey
-      ]],
-    },
-  });
-}
+    console.log(`✅ Orden sincronizada: ${orderId}`);
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ Error en webhook:", err.response?.data || err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 /* ======================================================
    🔄 SYNC PRODUCTS (manual)
